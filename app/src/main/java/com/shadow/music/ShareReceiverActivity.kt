@@ -17,9 +17,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.schabi.newpipe.extractor.NewPipe
+import org.schabi.newpipe.extractor.ServiceList
+import org.schabi.newpipe.extractor.stream.StreamExtractor
+import org.schabi.newpipe.extractor.stream.AudioStream
 import java.io.File
+import java.io.FileOutputStream
 
 class ShareReceiverActivity : AppCompatActivity() {
+
+    private val http = OkHttpClient()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,29 +55,96 @@ class ShareReceiverActivity : AppCompatActivity() {
     private fun handleShare(url: String, tvTitle: TextView, tvStatus: TextView, progressBar: ProgressBar) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                withContext(Dispatchers.Main) { progressBar.progress = 10; tvStatus.text = "🔍 Поиск часов Huawei..." }
-
+                // 1. Find watch
+                withContext(Dispatchers.Main) { progressBar.progress = 5; tvStatus.text = "🔍 Поиск часов Huawei..." }
                 val watch = findHuaweiWatch()
-                    ?: throw Exception("Часы Huawei не найдены в сопряжённых устройствах.\nВключите Bluetooth и убедитесь что часы сопряжены.")
+                    ?: throw Exception("Часы Huawei не найдены.\nВключите Bluetooth и убедитесь что часы сопряжены.")
 
-                withContext(Dispatchers.Main) { progressBar.progress = 20; tvStatus.text = "✅ ${watch.name} найдены\n⬇️ Скачиваю MP3..." }
+                withContext(Dispatchers.Main) { progressBar.progress = 15; tvStatus.text = "✅ ${watch.name}\n🔍 Извлечение потока YouTube..." }
 
+                // 2. Extract stream URL via NewPipe Extractor (pure Java, works on Android)
+                NewPipe.init(object : org.schabi.newpipe.extractor.downloader.Downloader() {
+                    override fun execute(request: org.schabi.newpipe.extractor.downloader.Request): org.schabi.newpipe.extractor.downloader.Response {
+                        val req = Request.Builder().url(request.url())
+                            .apply { request.headers().forEach { (k, v) -> v.forEach { addHeader(k, it) } } }
+                            .build()
+                        val resp = http.newCall(req).execute()
+                        return org.schabi.newpipe.extractor.downloader.Response(
+                            resp.code, resp.message,
+                            resp.headers.toMultimap(),
+                            resp.body?.string() ?: "",
+                            resp.request.url.toString()
+                        )
+                    }
+                })
+
+                val extractor: StreamExtractor = ServiceList.YouTube.getStreamExtractor(url)
+                extractor.fetchPage()
+
+                val trackTitle = extractor.name
+                val trackArtist = try { extractor.uploaderName } catch (e: Exception) { "YouTube Music" }
+
+                withContext(Dispatchers.Main) {
+                    progressBar.progress = 35
+                    tvTitle.text = "🎵 $trackTitle"
+                    tvStatus.text = "⬇️ Скачиваю аудио..."
+                }
+
+                // Pick best audio stream
+                val audioStream: AudioStream = extractor.audioStreams
+                    .filter { it.format?.mimeType?.contains("audio") == true }
+                    .maxByOrNull { it.averageBitrate }
+                    ?: throw Exception("Аудио поток не найден")
+
+                val audioUrl = audioStream.content
+
+                // 3. Download audio to cache
                 val outDir = File(externalCacheDir ?: cacheDir, "shadowmusic").also { it.mkdirs() }
-                val (mp3File, trackTitle, trackArtist) = downloadTrack(url, outDir) { prog, msg ->
-                    runOnUiThread { progressBar.progress = 20 + (prog * 0.5).toInt(); tvStatus.text = msg }
+                val safeTitle = trackTitle.replace(Regex("[^\\w\\s-]"), "").trim().take(80)
+                val mp3File = File(outDir, "$safeTitle.m4a") // YouTube sends m4a/webm
+
+                val dlReq = Request.Builder().url(audioUrl)
+                    .header("User-Agent", "Mozilla/5.0")
+                    .header("Referer", "https://music.youtube.com/")
+                    .build()
+                val dlResp = http.newCall(dlReq).execute()
+                val body = dlResp.body ?: throw Exception("Пустой ответ от YouTube")
+                val total = body.contentLength()
+                var downloaded = 0L
+
+                FileOutputStream(mp3File).use { out ->
+                    body.byteStream().use { input ->
+                        val buf = ByteArray(8192)
+                        var n: Int
+                        while (input.read(buf).also { n = it } != -1) {
+                            out.write(buf, 0, n)
+                            downloaded += n
+                            if (total > 0) {
+                                val pct = (downloaded * 100 / total).toInt()
+                                runOnUiThread { progressBar.progress = 35 + (pct * 0.4).toInt() }
+                            }
+                        }
+                    }
                 }
 
                 withContext(Dispatchers.Main) {
-                    progressBar.progress = 75
-                    tvTitle.text = "🎵 $trackTitle — $trackArtist"
+                    progressBar.progress = 80
                     tvStatus.text = "📤 Отправка на часы по Bluetooth OPP..."
-                    sendViaBtOpp(watch, mp3File)
+                }
+
+                // 4. Send via Bluetooth OPP
+                withContext(Dispatchers.Main) {
+                    sendViaBtOpp(watch, mp3File, trackTitle, trackArtist)
                     progressBar.progress = 100
-                    tvStatus.text = "✅ Отправлено! Прими запрос на экране часов."
+                    tvStatus.text = "✅ Отправлено!\nПрими запрос на экране часов."
                     Toast.makeText(applicationContext, "⌚ Прими передачу на часах!", Toast.LENGTH_LONG).show()
                 }
+
             } catch (e: Exception) {
-                withContext(Dispatchers.Main) { progressBar.progress = 0; tvStatus.text = "❌ ${e.message}" }
+                withContext(Dispatchers.Main) {
+                    progressBar.progress = 0
+                    tvStatus.text = "❌ ${e.message}"
+                }
             }
         }
     }
@@ -83,41 +159,13 @@ class ShareReceiverActivity : AppCompatActivity() {
         }
     }
 
-    private fun downloadTrack(url: String, outDir: File, onProgress: (Int, String) -> Unit): Triple<File, String, String> {
-        onProgress(5, "⬇️ Подключение к YouTube Music...")
-        val proc = ProcessBuilder(
-            "yt-dlp", "--extract-audio", "--audio-format", "mp3",
-            "--audio-quality", "0", "--embed-thumbnail", "--add-metadata",
-            "--no-playlist", "-o", File(outDir, "%(title)s.%(ext)s").absolutePath, url
-        ).redirectErrorStream(true).directory(outDir).start()
-
-        proc.inputStream.bufferedReader().forEachLine { line ->
-            val pct = when {
-                line.contains("[download]") && line.contains("%") ->
-                    Regex("(\\d+\\.?\\d*)%").find(line)?.groupValues?.get(1)?.toFloatOrNull()?.toInt() ?: return@forEachLine
-                line.contains("[ExtractAudio]") -> 88
-                line.contains("[EmbedThumbnail]") -> 95
-                else -> return@forEachLine
-            }
-            onProgress(pct, line.trim().take(80))
-        }
-
-        if (proc.waitFor() != 0) throw Exception("yt-dlp не установлен на устройстве или ошибка сети.")
-        val mp3 = outDir.listFiles { f -> f.extension == "mp3" }?.maxByOrNull { it.lastModified() }
-            ?: throw Exception("MP3 не найден после скачивания")
-        val name = mp3.nameWithoutExtension
-        val (artist, title) = if (" - " in name) name.split(" - ", limit = 2).let { it[0].trim() to it[1].trim() } else "Unknown" to name
-        onProgress(100, "✅ Скачано: ${mp3.name}")
-        return Triple(mp3, title, artist)
-    }
-
     @SuppressLint("MissingPermission")
-    private fun sendViaBtOpp(device: BluetoothDevice, file: File) {
+    private fun sendViaBtOpp(device: BluetoothDevice, file: File, title: String, artist: String) {
         val uri: Uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
         startActivity(Intent("android.btopp.intent.action.SEND_FILE").apply {
             putExtra("android.btopp.intent.extra.DEVICE_ADDRESS", device.address)
             putExtra(Intent.EXTRA_STREAM, uri)
-            type = "audio/mpeg"
+            type = "audio/*"
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         })
     }

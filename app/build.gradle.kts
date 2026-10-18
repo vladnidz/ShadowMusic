@@ -11,8 +11,8 @@ android {
         applicationId = "com.shadow.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.3.0"
+        versionCode = 6
+        versionName = "1.4.0"
     }
 
     buildTypes {
@@ -44,4 +44,6 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // NewPipe Extractor — pure Java YouTube stream URL extractor, works on Android
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.24.2")
 }
