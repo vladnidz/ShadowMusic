@@ -31,17 +31,17 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.2.0.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.2.1.apk \;
           ls -lh release-output/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.2.0
-          name: "ShadowMusic v1.2.0 (Huawei Health Protocol Edition)"
+          tag_name: v1.2.1
+          name: "ShadowMusic v1.2.1 (Real Hardware Detection)"
           body: |
-            ### ⚡ ShadowMusic v1.2.0 (Huawei Health Protocol Edition)
-            - **Native Huawei TLV BLE Protocol**: Uses reverse-engineered `FileUpload (id: 0x28, fileType: 2, MUSIC)` from Gadgetbridge.
-            - **Zero Standby Battery Drain**: Watches remain in Deep Sleep until a transfer packet is sent.
-            - **No Watch Daemon Needed**: Files are transferred directly into Huawei's native music service.
-          files: release-output/ShadowMusic-v1.2.0.apk
+            ### ⚡ ShadowMusic v1.2.1 (Real Hardware Detection)
+            - **Honest Hardware Status**: Probes Bluetooth adapter and Wi-Fi socket in real-time.
+            - **No Mock / Fake Labels**: Displays accurate red/yellow/green connection status based on actual radio state.
+            - **Dual Channel**: Real-time switching between Wi-Fi and Bluetooth.
+          files: release-output/ShadowMusic-v1.2.1.apk
