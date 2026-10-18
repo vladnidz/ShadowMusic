@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shadow Neon Green Palette -->
+    <color name="shadow_black">#0A0D0B</color>
+    <color name="shadow_card_bg">#141916</color>
+    <color name="shadow_card_stroke">#25332A</color>
+    <color name="neon_green">#00FF66</color>
+    <color name="neon_green_light">#39FF14</color>
+    <color name="neon_green_dark">#00CC44</color>
+    <color name="neon_green_glow">#3300FF66</color>
+    <color name="text_white">#F5F5F5</color>
+    <color name="text_muted">#8E9992</color>
+    <color name="status_connected">#00FF66</color>
+    <color name="status_pending">#FFB800</color>
+</resources>

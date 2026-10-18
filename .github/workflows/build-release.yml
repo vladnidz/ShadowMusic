@@ -1,0 +1,48 @@
+name: Build ShadowMusic APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: 17
+          distribution: "temurin"
+          cache: "gradle"
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew || true
+
+      - name: Build with Gradle
+        run: gradle assembleRelease --no-daemon || ./gradlew assembleRelease --no-daemon
+
+      - name: Prepare APK
+        run: |
+          mkdir -p release-output
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.0.0.apk \;
+          ls -lh release-output/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          name: "ShadowMusic v1.0.0 (Neon Green Edition)"
+          body: |
+            ### ⚡ ShadowMusic for Xiaomi 14T & Huawei Watch 3 Pro
+            - **Neon Green Dark Theme**: Deep black & electric neon green UI.
+            - **1-Click Share Integration**: Share directly from **YouTube Music ReVanced** ➔ `⌚ Отправить на Huawei Watch 3 Pro`.
+            - **Dual-Link Transport**: Transfers over Wi-Fi Direct or Bluetooth Standby anywhere.
+            - **HD Audio & Covers**: Saves directly to `/sdcard/Music` on the watch for playback in the native Huawei Music player with crown scrolling.
+          files: release-output/ShadowMusic-v1.0.0.apk
