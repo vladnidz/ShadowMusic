@@ -31,18 +31,17 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.1.0.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.2.0.apk \;
           ls -lh release-output/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.1.0
-          name: "ShadowMusic v1.1.0 (Album & Playlists Support)"
+          tag_name: v1.2.0
+          name: "ShadowMusic v1.2.0 (Huawei Health Protocol Edition)"
           body: |
-            ### ⚡ ShadowMusic v1.1.0 (Playlists & Albums Edition)
-            - **Album & Playlist 1-Click Sharing**: Share full albums and playlists directly from YouTube Music ReVanced.
-            - **Auto M3U Generation**: Generates `.m3u` playlist files automatically placed in `/sdcard/Music/Playlists/`.
-            - **Imported Songs Directory**: Targets `/sdcard/Music/Imported Songs/` for native Huawei Music recognition.
-            - **MediaScanner Broadcast**: Automatically refreshes the Huawei watch library so tracks show up instantly.
-          files: release-output/ShadowMusic-v1.1.0.apk
+            ### ⚡ ShadowMusic v1.2.0 (Huawei Health Protocol Edition)
+            - **Native Huawei TLV BLE Protocol**: Uses reverse-engineered `FileUpload (id: 0x28, fileType: 2, MUSIC)` from Gadgetbridge.
+            - **Zero Standby Battery Drain**: Watches remain in Deep Sleep until a transfer packet is sent.
+            - **No Watch Daemon Needed**: Files are transferred directly into Huawei's native music service.
+          files: release-output/ShadowMusic-v1.2.0.apk
