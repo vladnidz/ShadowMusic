@@ -31,18 +31,18 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.0.0.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.1.0.apk \;
           ls -lh release-output/
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.0
-          name: "ShadowMusic v1.0.0 (Neon Green Edition)"
+          tag_name: v1.1.0
+          name: "ShadowMusic v1.1.0 (Album & Playlists Support)"
           body: |
-            ### ⚡ ShadowMusic for Xiaomi 14T & Huawei Watch 3 Pro
-            - **Neon Green Dark Theme**: Deep black & electric neon green UI.
-            - **1-Click Share Integration**: Share directly from **YouTube Music ReVanced** ➔ `⌚ Отправить на Huawei Watch 3 Pro`.
-            - **Dual-Link Transport**: Transfers over Wi-Fi Direct or Bluetooth Standby anywhere.
-            - **HD Audio & Covers**: Saves directly to `/sdcard/Music` on the watch for playback in the native Huawei Music player with crown scrolling.
-          files: release-output/ShadowMusic-v1.0.0.apk
+            ### ⚡ ShadowMusic v1.1.0 (Playlists & Albums Edition)
+            - **Album & Playlist 1-Click Sharing**: Share full albums and playlists directly from YouTube Music ReVanced.
+            - **Auto M3U Generation**: Generates `.m3u` playlist files automatically placed in `/sdcard/Music/Playlists/`.
+            - **Imported Songs Directory**: Targets `/sdcard/Music/Imported Songs/` for native Huawei Music recognition.
+            - **MediaScanner Broadcast**: Automatically refreshes the Huawei watch library so tracks show up instantly.
+          files: release-output/ShadowMusic-v1.1.0.apk

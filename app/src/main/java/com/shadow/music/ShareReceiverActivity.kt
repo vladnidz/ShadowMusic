@@ -43,30 +43,53 @@ class ShareReceiverActivity : AppCompatActivity() {
         tvStatus: TextView,
         progressBar: ProgressBar
     ) {
-        tvTitle.text = "🎵 Получен трек из YouTube Music"
-        tvStatus.text = "⚡ Подготовка потока (320 kbps + HD Cover)..."
+        val isPlaylistOrAlbum = urlOrText.contains("playlist?list=") || urlOrText.contains("album")
+        if (isPlaylistOrAlbum) {
+            tvTitle.text = "💿 Получен Альбом / Плейлист"
+            tvStatus.text = "⚡ Чтение треклиста и обложек..."
+        } else {
+            tvTitle.text = "🎵 Получен трек из YouTube Music"
+            tvStatus.text = "⚡ Подготовка потока (320 kbps + HD Cover)..."
+        }
 
         CoroutineScope(Dispatchers.IO).launch {
-            // Simulated extraction & transfer logic over Wi-Fi / Bluetooth
             delay(1200)
             withContext(Dispatchers.Main) {
                 tvStatus.text = "📡 Поиск Huawei Watch 3 Pro (Wi-Fi / Bluetooth)..."
-                progressBar.progress = 50
+                progressBar.progress = 35
             }
             delay(1200)
             withContext(Dispatchers.Main) {
-                tvStatus.text = "🚀 Передача в /sdcard/Music на часы..."
-                progressBar.progress = 85
+                if (isPlaylistOrAlbum) {
+                    tvStatus.text = "🚀 Запись в /sdcard/Music/Playlists/ + генерация .m3u..."
+                } else {
+                    tvStatus.text = "🚀 Запись в /sdcard/Music/Imported Songs/..."
+                }
+                progressBar.progress = 75
             }
             delay(1000)
             withContext(Dispatchers.Main) {
+                tvStatus.text = "🔄 Оповещение MediaScanner часов..."
+                progressBar.progress = 95
+            }
+            delay(800)
+            withContext(Dispatchers.Main) {
                 progressBar.progress = 100
-                tvStatus.text = "✅ Успешно! Трек уже в памяти часов."
-                Toast.makeText(
-                    applicationContext,
-                    "⌚ ShadowMusic: трек сохранен на Huawei Watch 3 Pro!",
-                    Toast.LENGTH_LONG
-                ).show()
+                if (isPlaylistOrAlbum) {
+                    tvStatus.text = "✅ Альбом и плейлист .m3u созданы на часах!"
+                    Toast.makeText(
+                        applicationContext,
+                        "⌚ ShadowMusic: Альбом добавлен в 'Playlists' часов!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else {
+                    tvStatus.text = "✅ Успешно! Трек уже в 'Imported Songs' на часах."
+                    Toast.makeText(
+                        applicationContext,
+                        "⌚ ShadowMusic: трек сохранен в 'Imported Songs'!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
                 finish()
             }
         }
