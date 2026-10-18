@@ -66,6 +66,8 @@ class ShareReceiverActivity : AppCompatActivity() {
                 NewPipe.init(object : org.schabi.newpipe.extractor.downloader.Downloader() {
                     override fun execute(request: org.schabi.newpipe.extractor.downloader.Request): org.schabi.newpipe.extractor.downloader.Response {
                         val req = Request.Builder().url(request.url())
+                            .header("User-Agent", "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36")
+                            .header("Accept-Language", "en-US,en;q=0.9")
                             .apply { request.headers().forEach { (k, v) -> v.forEach { addHeader(k, it) } } }
                             .build()
                         val resp = http.newCall(req).execute()
