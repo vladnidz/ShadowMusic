@@ -73,7 +73,12 @@ class ShareReceiverActivity : AppCompatActivity() {
                     override fun execute(request: org.schabi.newpipe.extractor.downloader.Request): org.schabi.newpipe.extractor.downloader.Response {
                         val req = Request.Builder().url(request.url())
                             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+                            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
                             .header("Accept-Language", "en-US,en;q=0.9")
+                            .header("Referer", "https://www.youtube.com/")
+                            .header("Sec-Fetch-Mode", "navigate")
+                            .header("Sec-Fetch-Site", "same-origin")
+                            .header("DNT", "1")
                             .apply { request.headers().forEach { (k, v) -> v.forEach { addHeader(k, it) } } }
                             .build()
                         val resp = http.newCall(req).execute()
