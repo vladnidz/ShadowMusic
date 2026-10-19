@@ -31,24 +31,23 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.5.1.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.5.2.apk \;
           ls -lh release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-v1.5.1-APK
-          path: release-output/ShadowMusic-v1.5.1.apk
+          name: ShadowMusic-v1.5.2-APK
+          path: release-output/ShadowMusic-v1.5.2.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.5.1
-          name: "ShadowMusic v1.5.1 (NewPipeExtractor v0.26.5 Fix)"
+          tag_name: v1.5.2
+          name: "ShadowMusic v1.5.2 (Unthrottled Download & Bluetooth Handler)"
           body: |
-            ### ⚡ ShadowMusic v1.5.1
-            - **Upgraded NewPipeExtractor to v0.26.5**: Fixes YouTube's `The page needs to be reloaded` (TVHTML5 removal & SABR bypass).
-            - **Full POST Data forwarding**: Downloader properly forwards POST requestBody.
-            - **Runtime Permissions on Start**: Requests Bluetooth and Storage permissions immediately on app launch.
-            - **Bluetooth OPP Direct Transfer**: Direct send to paired Huawei Watch 3 Pro.
-          files: release-output/ShadowMusic-v1.5.1.apk
+            ### ⚡ ShadowMusic v1.5.2
+            - **Unthrottled High-Speed Download**: Implemented 1MB Range chunk downloading. Completely bypasses YouTube's 128 kbps rate-limiting. Download takes seconds instead of minutes.
+            - **Real Bluetooth Intent Resolution**: Uses `PackageManager.queryIntentActivities` to launch Xiaomi HyperOS Bluetooth transfer activity reliably.
+            - **Honest UI State**: Direct user guidance during Bluetooth dispatch.
+          files: release-output/ShadowMusic-v1.5.2.apk

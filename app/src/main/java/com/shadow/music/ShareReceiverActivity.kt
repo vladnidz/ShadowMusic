@@ -38,8 +38,8 @@ import java.util.concurrent.TimeUnit
 class ShareReceiverActivity : AppCompatActivity() {
 
     private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
     companion object {
@@ -191,15 +191,18 @@ class ShareReceiverActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     progressBar.progress = 5
                     tvTitle.text = "🎵 Обработка трека..."
-                    tvStatus.text = "🔍 Поиск часов Huawei в сопряжённых Bluetooth..."
+                    tvStatus.text = "🔍 Проверка Bluetooth и поиск Huawei Watch..."
                 }
 
                 val watch = findHuaweiWatch()
-                    ?: throw Exception("Часы Huawei не найдены в сопряжённых устройствах.\nВключите Bluetooth и сопрягите часы.")
 
                 withContext(Dispatchers.Main) {
                     progressBar.progress = 15
-                    tvStatus.text = "✅ Найдено: ${watch.name}\n🔍 Извлечение аудиопотока..."
+                    if (watch != null) {
+                        tvStatus.text = "✅ Найдено: ${watch.name}\n🔍 Извлечение аудиопотока..."
+                    } else {
+                        tvStatus.text = "🔍 Извлечение аудиопотока..."
+                    }
                 }
 
                 // 2. Нормализация URL
@@ -214,9 +217,9 @@ class ShareReceiverActivity : AppCompatActivity() {
                 val trackArtist = try { extractor.uploaderName } catch (e: Exception) { "YouTube" }
 
                 withContext(Dispatchers.Main) {
-                    progressBar.progress = 30
+                    progressBar.progress = 25
                     tvTitle.text = "🎵 $trackTitle"
-                    tvStatus.text = "🎤 $trackArtist\n⬇️ Скачивание звуковой дорожки..."
+                    tvStatus.text = "🎤 $trackArtist\n⚡ Быстрое скачивание потока..."
                 }
 
                 // 3. Выбор лучшего аудиопотока
@@ -228,51 +231,32 @@ class ShareReceiverActivity : AppCompatActivity() {
 
                 val audioUrl = audioStream.content
 
-                // 4. Скачивание аудиофайла
+                // 4. Быстрое скачивание через 1MB Range-чанки (обход 128kbps шейпера YouTube)
                 val outDir = File(externalCacheDir ?: cacheDir, "shadowmusic").also { it.mkdirs() }
                 val safeTitle = trackTitle.replace(Regex("[^\\w\\sА-Яа-яЁё-]"), "").trim().take(70)
                 val ext = if (audioStream.format?.mimeType?.contains("webm") == true) "webm" else "m4a"
                 val audioFile = File(outDir, "$safeTitle.$ext")
 
-                val dlReq = Request.Builder()
-                    .url(audioUrl)
-                    .header("User-Agent", "Mozilla/5.0")
-                    .header("Referer", "https://www.youtube.com/")
-                    .build()
-
-                val dlResp = httpClient.newCall(dlReq).execute()
-                val body = dlResp.body ?: throw Exception("Пустой ответ при скачивании аудио")
-                val totalLength = body.contentLength()
-                var downloadedBytes = 0L
-
-                FileOutputStream(audioFile).use { outStream ->
-                    body.byteStream().use { inStream ->
-                        val buffer = ByteArray(16384)
-                        var bytesRead: Int
-                        while (inStream.read(buffer).also { bytesRead = it } != -1) {
-                            outStream.write(buffer, 0, bytesRead)
-                            downloadedBytes += bytesRead
-                            if (totalLength > 0) {
-                                val percent = (downloadedBytes * 100 / totalLength).toInt()
-                                runOnUiThread {
-                                    progressBar.progress = 30 + (percent * 0.45).toInt()
-                                }
-                            }
-                        }
+                downloadStreamUnthrottled(audioUrl, audioFile) { percent, downloaded, total ->
+                    runOnUiThread {
+                        progressBar.progress = 25 + (percent * 0.55).toInt()
+                        val totalKb = if (total > 0) total / 1024 else 0
+                        tvStatus.text = "⬇️ Скачивание: ${downloaded / 1024} KB" +
+                                (if (totalKb > 0) " / $totalKb KB ($percent%)" else "")
                     }
                 }
 
                 withContext(Dispatchers.Main) {
-                    progressBar.progress = 80
-                    tvStatus.text = "📤 Отправка файла (${audioFile.length() / 1024} KB) на ${watch.name}..."
+                    progressBar.progress = 90
+                    tvStatus.text = "📲 Запуск Bluetooth передачи на часы..."
                 }
 
-                // 5. Отправка через Bluetooth OPP
+                // 5. Отправка файла через Bluetooth
                 withContext(Dispatchers.Main) {
-                    sendViaBtOpp(watch, audioFile)
+                    shareAudioViaBluetooth(audioFile)
                     progressBar.progress = 100
-                    tvStatus.text = "✅ Отправлено!\nПодтвердите приём на экране часов."
-                    Toast.makeText(applicationContext, "⌚ Примите трек на часах!", Toast.LENGTH_LONG).show()
+                    tvStatus.text = "🚀 Передача запущена!\nВыберите Huawei Watch в списке Bluetooth."
+                    Toast.makeText(applicationContext, "⌚ Выберите часы в меню Bluetooth!", Toast.LENGTH_LONG).show()
                 }
 
             } catch (e: Exception) {
@@ -280,6 +264,85 @@ class ShareReceiverActivity : AppCompatActivity() {
                     progressBar.progress = 0
                     tvStatus.text = "❌ Ошибка: ${e.message}"
                 }
+            }
+        }
+    }
+
+    private fun downloadStreamUnthrottled(
+        streamUrl: String,
+        destFile: File,
+        onProgress: (Int, Long, Long) -> Unit
+    ) {
+        val chunkSize = 1024 * 1024L // 1 MB Range-чанки обходят throttling
+        var currentOffset = 0L
+        var totalBytes = -1L
+
+        // Попытка узнать размер
+        try {
+            val headReq = Request.Builder()
+                .url(streamUrl)
+                .header("User-Agent", "Mozilla/5.0")
+                .header("Referer", "https://www.youtube.com/")
+                .head()
+                .build()
+            val headResp = httpClient.newCall(headReq).execute()
+            totalBytes = headResp.header("Content-Length")?.toLongOrNull() ?: -1L
+            headResp.close()
+        } catch (e: Exception) {}
+
+        FileOutputStream(destFile).use { outStream ->
+            var keepDownloading = true
+            while (keepDownloading) {
+                val endByte = if (totalBytes > 0) minOf(currentOffset + chunkSize - 1, totalBytes - 1) else currentOffset + chunkSize - 1
+                val chunkReq = Request.Builder()
+                    .url(streamUrl)
+                    .header("User-Agent", "Mozilla/5.0")
+                    .header("Range", "bytes=$currentOffset-$endByte")
+                    .header("Referer", "https://www.youtube.com/")
+                    .build()
+
+                val chunkResp = httpClient.newCall(chunkReq).execute()
+                val code = chunkResp.code
+
+                if (code == 206) {
+                    val bytes = chunkResp.body?.bytes() ?: break
+                    if (bytes.isEmpty()) break
+                    outStream.write(bytes)
+                    currentOffset += bytes.size
+
+                    val contentRange = chunkResp.header("Content-Range")
+                    if (contentRange != null && totalBytes <= 0) {
+                        val parsed = Regex("/(\\d+)").find(contentRange)?.groupValues?.get(1)?.toLongOrNull()
+                        if (parsed != null && parsed > 0) totalBytes = parsed
+                    }
+
+                    if (totalBytes > 0) {
+                        val pct = ((currentOffset * 100) / totalBytes).toInt().coerceIn(0, 100)
+                        onProgress(pct, currentOffset, totalBytes)
+                        if (currentOffset >= totalBytes) keepDownloading = false
+                    } else {
+                        onProgress(50, currentOffset, -1L)
+                    }
+                } else if (code == 200) {
+                    // Fallback на обычный поток если сервер не отдал 206
+                    val body = chunkResp.body ?: break
+                    val streamTotal = body.contentLength().takeIf { it > 0 } ?: totalBytes
+                    val inStream = body.byteStream()
+                    val buf = ByteArray(32768)
+                    var read: Int
+                    while (inStream.read(buf).also { read = it } != -1) {
+                        outStream.write(buf, 0, read)
+                        currentOffset += read
+                        if (streamTotal > 0) {
+                            val pct = ((currentOffset * 100) / streamTotal).toInt().coerceIn(0, 100)
+                            onProgress(pct, currentOffset, streamTotal)
+                        }
+                    }
+                    keepDownloading = false
+                } else {
+                    keepDownloading = false
+                }
+                chunkResp.close()
             }
         }
     }
@@ -297,31 +360,38 @@ class ShareReceiverActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private fun sendViaBtOpp(device: BluetoothDevice, file: File) {
+    private fun shareAudioViaBluetooth(file: File) {
         val uri: Uri = FileProvider.getUriForFile(
             this,
             "${packageName}.fileprovider",
             file
         )
-        val intent = Intent("android.btopp.intent.action.SEND_FILE").apply {
-            setClassName("com.android.bluetooth", "com.android.bluetooth.opp.BluetoothOppLauncherActivity")
-            putExtra("android.btopp.intent.extra.DEVICE_ADDRESS", device.address)
-            putExtra(Intent.EXTRA_STREAM, uri)
+
+        val sendIntent = Intent(Intent.ACTION_SEND).apply {
             type = "audio/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        try {
-            startActivity(intent)
-        } catch (e: Exception) {
-            // Fallback to generic bluetooth intent
-            val fallback = Intent(Intent.ACTION_SEND).apply {
-                setPackage("com.android.bluetooth")
-                putExtra(Intent.EXTRA_STREAM, uri)
-                type = "audio/*"
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(fallback)
+
+        // Поиск зарегистрированного обработчика Bluetooth на устройстве (в т.ч. Xiaomi HyperOS)
+        val pm = packageManager
+        val resolveList = pm.queryIntentActivities(sendIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        val btResolve = resolveList.firstOrNull {
+            it.activityInfo.packageName.contains("bluetooth", ignoreCase = true) ||
+            it.activityInfo.name.contains("bluetooth", ignoreCase = true)
         }
+
+        if (btResolve != null) {
+            sendIntent.setClassName(btResolve.activityInfo.packageName, btResolve.activityInfo.name)
+            try {
+                startActivity(sendIntent)
+                return
+            } catch (e: Exception) {}
+        }
+
+        // Fallback: системный диалог шаринга
+        val chooser = Intent.createChooser(sendIntent, "Отправить на Huawei Watch через Bluetooth")
+        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startActivity(chooser)
     }
 }
