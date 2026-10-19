@@ -31,24 +31,23 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.6.0.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.6.1.apk \;
           ls -lh release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-v1.6.0-APK
-          path: release-output/ShadowMusic-v1.6.0.apk
+          name: ShadowMusic-v1.6.1-APK
+          path: release-output/ShadowMusic-v1.6.1.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6.0
-          name: "ShadowMusic v1.6.0 (Instant Wi-Fi Push & BT Fallback)"
+          tag_name: v1.6.1
+          name: "ShadowMusic v1.6.1 (Auto ADB Key Generation)"
           body: |
-            ### ⚡ ShadowMusic v1.6.0
-            - **Instant Wi-Fi Direct Push**: When on the same Wi-Fi as Huawei Watch 3 Pro, pushes file directly into `/sdcard/Music/Imported Songs/` in 1.5 seconds with ZERO button presses needed on the watch.
-            - **Auto Media Scanner Broadcast**: Song appears in native Huawei Music player immediately with metadata & album art.
-            - **Unthrottled 1MB Range Download**: Takes seconds to extract and download stream.
-            - **Seamless Bluetooth Fallback**: When outside or away from home Wi-Fi, triggers Bluetooth share sheet.
-          files: release-output/ShadowMusic-v1.6.0.apk
+            ### ⚡ ShadowMusic v1.6.1
+            - **Auto ADB KeyPair Generation**: Fixed `~/.android/adbkey ENOENT` error. App now automatically creates and manages its own secure ADB key pair in internal storage (`filesDir/adbkey`).
+            - **Instant Wi-Fi Direct Push**: Direct push to `/sdcard/Music/Imported Songs/` with auto-scanner broadcast.
+            - **Seamless Bluetooth Fallback**: When away from home Wi-Fi.
+          files: release-output/ShadowMusic-v1.6.1.apk

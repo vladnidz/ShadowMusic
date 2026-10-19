@@ -285,17 +285,27 @@ class ShareReceiverActivity : AppCompatActivity() {
         }
     }
 
+    private fun getOrCreateAdbKeyPair(): dadb.AdbKeyPair {
+        val privKey = File(filesDir, "adbkey")
+        val pubKey = File(filesDir, "adbkey.pub")
+        if (!privKey.exists() || !pubKey.exists()) {
+            dadb.AdbKeyPair.generate(privKey, pubKey)
+        }
+        return dadb.AdbKeyPair.read(privKey, pubKey)
+    }
+
     private fun pushDirectlyToWatch(ip: String, file: File) {
-        val dadb = Dadb.create(ip, 5555)
+        val keyPair = getOrCreateAdbKeyPair()
+        val dadbInstance = Dadb.create(ip, 5555, keyPair)
         try {
             val remoteDir = "/sdcard/Music/Imported Songs"
-            dadb.shell("mkdir -p '$remoteDir'")
+            dadbInstance.shell("mkdir -p '$remoteDir'")
             val remotePath = "$remoteDir/${file.name}"
-            dadb.push(file, remotePath)
+            dadbInstance.push(file, remotePath)
             val encoded = remotePath.replace(" ", "%20")
-            dadb.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file://$encoded'")
+            dadbInstance.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file://$encoded'")
         } finally {
-            dadb.close()
+            dadbInstance.close()
         }
     }
 
