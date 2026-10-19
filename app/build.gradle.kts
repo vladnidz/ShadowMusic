@@ -11,8 +11,8 @@ android {
         applicationId = "com.shadow.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.5.2"
+        versionCode = 10
+        versionName = "1.6.0"
     }
 
     buildTypes {
@@ -46,4 +46,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     // NewPipe Extractor v0.26.5: fixes 'The page needs to be reloaded' & TVHTML5/SABR bypass
     implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.5")
+    // Pure Kotlin ADB client for direct, instant Wi-Fi push to watch
+    implementation("dev.mobile:dadb:1.2.9")
 }

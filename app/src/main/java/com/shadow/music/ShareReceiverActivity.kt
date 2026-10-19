@@ -18,8 +18,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import dadb.Dadb
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -33,7 +36,10 @@ import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamExtractor
 import java.io.File
 import java.io.FileOutputStream
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class ShareReceiverActivity : AppCompatActivity() {
 
@@ -187,25 +193,13 @@ class ShareReceiverActivity : AppCompatActivity() {
     private fun startTransferProcess(rawUrl: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                // 1. Поиск часов
+                // 1. Извлечение потока
                 withContext(Dispatchers.Main) {
-                    progressBar.progress = 5
+                    progressBar.progress = 10
                     tvTitle.text = "🎵 Обработка трека..."
-                    tvStatus.text = "🔍 Проверка Bluetooth и поиск Huawei Watch..."
+                    tvStatus.text = "🔍 Извлечение аудиопотока..."
                 }
 
-                val watch = findHuaweiWatch()
-
-                withContext(Dispatchers.Main) {
-                    progressBar.progress = 15
-                    if (watch != null) {
-                        tvStatus.text = "✅ Найдено: ${watch.name}\n🔍 Извлечение аудиопотока..."
-                    } else {
-                        tvStatus.text = "🔍 Извлечение аудиопотока..."
-                    }
-                }
-
-                // 2. Нормализация URL
                 val cleanUrl = rawUrl
                     .replace("music.youtube.com", "www.youtube.com")
                     .replace("m.youtube.com", "www.youtube.com")
@@ -222,7 +216,7 @@ class ShareReceiverActivity : AppCompatActivity() {
                     tvStatus.text = "🎤 $trackArtist\n⚡ Быстрое скачивание потока..."
                 }
 
-                // 3. Выбор лучшего аудиопотока
+                // 2. Выбор лучшего аудиопотока
                 val audioStream: AudioStream = extractor.audioStreams
                     .filter { it.format?.mimeType?.contains("audio") == true || it.format?.mimeType?.contains("mp4") == true }
                     .maxByOrNull { it.averageBitrate }
@@ -231,7 +225,7 @@ class ShareReceiverActivity : AppCompatActivity() {
 
                 val audioUrl = audioStream.content
 
-                // 4. Быстрое скачивание через 1MB Range-чанки (обход 128kbps шейпера YouTube)
+                // 3. Быстрое скачивание через 1MB Range-чанки
                 val outDir = File(externalCacheDir ?: cacheDir, "shadowmusic").also { it.mkdirs() }
                 val safeTitle = trackTitle.replace(Regex("[^\\w\\sА-Яа-яЁё-]"), "").trim().take(70)
                 val ext = if (audioStream.format?.mimeType?.contains("webm") == true) "webm" else "m4a"
@@ -246,17 +240,40 @@ class ShareReceiverActivity : AppCompatActivity() {
                     }
                 }
 
+                // 4. Передача на часы: Wi-Fi Direct Push (1.5 сек) или Bluetooth
                 withContext(Dispatchers.Main) {
-                    progressBar.progress = 90
-                    tvStatus.text = "📲 Запуск Bluetooth передачи на часы..."
+                    progressBar.progress = 85
+                    tvStatus.text = "📡 Поиск Huawei Watch в домашней Wi-Fi сети..."
                 }
 
-                // 5. Отправка файла через Bluetooth
-                withContext(Dispatchers.Main) {
-                    shareAudioViaBluetooth(audioFile)
-                    progressBar.progress = 100
-                    tvStatus.text = "🚀 Передача запущена!\nВыберите Huawei Watch в списке Bluetooth."
-                    Toast.makeText(applicationContext, "⌚ Выберите часы в меню Bluetooth!", Toast.LENGTH_LONG).show()
+                val watchIp = findWatchWifiIp()
+                if (watchIp != null) {
+                    withContext(Dispatchers.Main) {
+                        progressBar.progress = 90
+                        tvStatus.text = "⚡ Часы найдены на $watchIp!\nПрямая передача по Wi-Fi..."
+                    }
+
+                    pushDirectlyToWatch(watchIp, audioFile)
+
+                    withContext(Dispatchers.Main) {
+                        progressBar.progress = 100
+                        tvStatus.text = "✅ Трек добавлен в память часов!\nОткройте плеер Huawei Music."
+                        Toast.makeText(
+                            applicationContext,
+                            "⌚ «$trackTitle» уже на часах!",
+                            Toast.LENGTH_LONG
+                        ).show()
+                        window.decorView.postDelayed({ finish() }, 2000)
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        progressBar.progress = 90
+                        tvStatus.text = "📲 Вне Wi-Fi сети. Запуск Bluetooth передачи..."
+                        shareAudioViaBluetooth(audioFile)
+                        progressBar.progress = 100
+                        tvStatus.text = "🚀 Передача запущена!\nВыберите Huawei Watch в списке Bluetooth."
+                        Toast.makeText(applicationContext, "⌚ Выберите часы в меню Bluetooth!", Toast.LENGTH_LONG).show()
+                    }
                 }
 
             } catch (e: Exception) {
@@ -265,6 +282,52 @@ class ShareReceiverActivity : AppCompatActivity() {
                     tvStatus.text = "❌ Ошибка: ${e.message}"
                 }
             }
+        }
+    }
+
+    private fun pushDirectlyToWatch(ip: String, file: File) {
+        val dadb = Dadb.create(ip, 5555)
+        try {
+            val remoteDir = "/sdcard/Music/Imported Songs"
+            dadb.shell("mkdir -p '$remoteDir'")
+            val remotePath = "$remoteDir/${file.name}"
+            dadb.push(file, remotePath)
+            val encoded = remotePath.replace(" ", "%20")
+            dadb.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file://$encoded'")
+        } finally {
+            dadb.close()
+        }
+    }
+
+    private suspend fun findWatchWifiIp(): String? = withContext(Dispatchers.IO) {
+        val candidates = listOf("192.168.1.116", "192.168.1.242", "192.168.1.100")
+        for (ip in candidates) {
+            if (testSocket(ip, 5555)) return@withContext ip
+        }
+
+        // Сканирование подсети
+        val found = AtomicReference<String?>(null)
+        val jobs = (2..254).map { host ->
+            async {
+                if (found.get() != null) return@async
+                val ip = "192.168.1.$host"
+                if (testSocket(ip, 5555)) {
+                    found.set(ip)
+                }
+            }
+        }
+        jobs.awaitAll()
+        return@withContext found.get()
+    }
+
+    private fun testSocket(ip: String, port: Int): Boolean {
+        return try {
+            val s = Socket()
+            s.connect(InetSocketAddress(ip, port), 250)
+            s.close()
+            true
+        } catch (e: Exception) {
+            false
         }
     }
 
@@ -277,7 +340,6 @@ class ShareReceiverActivity : AppCompatActivity() {
         var currentOffset = 0L
         var totalBytes = -1L
 
-        // Попытка узнать размер
         try {
             val headReq = Request.Builder()
                 .url(streamUrl)
@@ -324,7 +386,6 @@ class ShareReceiverActivity : AppCompatActivity() {
                         onProgress(50, currentOffset, -1L)
                     }
                 } else if (code == 200) {
-                    // Fallback на обычный поток если сервер не отдал 206
                     val body = chunkResp.body ?: break
                     val streamTotal = body.contentLength().takeIf { it > 0 } ?: totalBytes
                     val inStream = body.byteStream()
@@ -347,19 +408,6 @@ class ShareReceiverActivity : AppCompatActivity() {
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private fun findHuaweiWatch(): BluetoothDevice? {
-        val btManager = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-        val adapter = btManager?.adapter ?: return null
-        if (!adapter.isEnabled) return null
-        return adapter.bondedDevices?.firstOrNull { dev ->
-            val name = dev.name ?: ""
-            name.contains("HUAWEI", ignoreCase = true) ||
-            name.contains("Watch", ignoreCase = true) ||
-            name.contains("HONOR", ignoreCase = true)
-        }
-    }
-
     private fun shareAudioViaBluetooth(file: File) {
         val uri: Uri = FileProvider.getUriForFile(
             this,
@@ -373,7 +421,6 @@ class ShareReceiverActivity : AppCompatActivity() {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
-        // Поиск зарегистрированного обработчика Bluetooth на устройстве (в т.ч. Xiaomi HyperOS)
         val pm = packageManager
         val resolveList = pm.queryIntentActivities(sendIntent, PackageManager.MATCH_DEFAULT_ONLY)
         val btResolve = resolveList.firstOrNull {
@@ -389,7 +436,6 @@ class ShareReceiverActivity : AppCompatActivity() {
             } catch (e: Exception) {}
         }
 
-        // Fallback: системный диалог шаринга
         val chooser = Intent.createChooser(sendIntent, "Отправить на Huawei Watch через Bluetooth")
         chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(chooser)
