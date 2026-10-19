@@ -28,8 +28,27 @@ jobs:
       - name: Build Release APK with Gradle Wrapper
         run: ./gradlew assembleRelease --stacktrace
 
+      - name: Prepare APK
+        run: |
+          mkdir -p release-output
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.5.0.apk \;
+          ls -lh release-output/
+
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-APK
-          path: app/build/outputs/apk/release/*.apk
+          name: ShadowMusic-v1.5.0-APK
+          path: release-output/ShadowMusic-v1.5.0.apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.5.0
+          name: "ShadowMusic v1.5.0 (InnerTube POST Fix & Permissions)"
+          body: |
+            ### ⚡ ShadowMusic v1.5.0
+            - **Fixed InnerTube POST requests**: Now properly forwards `request.dataToSend()` and `request.httpMethod()` in NewPipe extractor. Resolves the `Got HTML document, expected JSON response` error.
+            - **Runtime Permissions on Start**: Requests Bluetooth (`BLUETOOTH_CONNECT`, `BLUETOOTH_SCAN`) and Storage permissions immediately on app launch.
+            - **Clean YouTube URL Extraction**: Handles text containing links from YouTube & YouTube Music ReVanced.
+            - **Bluetooth OPP Direct Transfer**: Directly sends audio files to paired Huawei Watch 3 Pro into `/sdcard/Music/bluetooth/`.
+          files: release-output/ShadowMusic-v1.5.0.apk

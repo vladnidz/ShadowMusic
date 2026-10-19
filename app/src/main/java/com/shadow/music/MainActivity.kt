@@ -1,14 +1,18 @@
 package com.shadow.music
 
+import android.Manifest
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,9 +35,47 @@ class MainActivity : AppCompatActivity() {
         btnTest = findViewById(R.id.btnTestWatch)
 
         btnTest.setOnClickListener {
+            checkAndRequestPermissions()
             checkRealHardwareStatus()
         }
 
+        checkAndRequestPermissions()
+        checkRealHardwareStatus()
+    }
+
+    private fun checkAndRequestPermissions() {
+        val permissions = mutableListOf<String>()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+        } else {
+            permissions.add(Manifest.permission.BLUETOOTH)
+            permissions.add(Manifest.permission.BLUETOOTH_ADMIN)
+            permissions.add(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.READ_MEDIA_AUDIO)
+        } else {
+            permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+
+        val needed = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (needed.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1001)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         checkRealHardwareStatus()
     }
 
@@ -87,7 +129,7 @@ class MainActivity : AppCompatActivity() {
                     tvStatus.setTextColor(getColor(R.color.neon_green))
                 } else if (matchedDevice != null) {
                     tvStatus.text = "🟡 Часы сопряжены (Bluetooth)"
-                    tvDetails.text = "Устройство: ${matchedDevice.name}. Вне домашнего Wi-Fi"
+                    tvDetails.text = "Устройство: ${matchedDevice.name}. Готово к передаче по Bluetooth"
                     tvStatus.setTextColor(getColor(R.color.status_pending))
                 } else {
                     tvStatus.text = "🔴 Часы не найдены"
