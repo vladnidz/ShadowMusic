@@ -317,14 +317,42 @@ class TransferService : Service() {
         }
 
         if (downloadedCount > 0) {
+            // Создаем .m3u плейлист для Huawei Music
+            val safeAlbumTitle = albumTitle.replace(Regex("[^\\w\\sА-Яа-яЁё-]"), "").trim().take(70)
+            val playlistDir = File(externalCacheDir ?: cacheDir, "shadowmusic/playlists").also { it.mkdirs() }
+            val m3uFile = File(playlistDir, "$safeAlbumTitle.m3u")
+
+            val m3uContent = StringBuilder()
+            m3uContent.append("#EXTM3U\n")
+            for (f in downloadedFiles) {
+                m3uContent.append("#EXTINF:-1,${f.nameWithoutExtension}\n")
+                m3uContent.append("/sdcard/Music/Imported Songs/${f.name}\n")
+            }
+            m3uFile.writeText(m3uContent.toString())
+
             if (watchIp != null) {
+                // Пушим плейлист в системную папку /sdcard/Music/Playlists/
+                try {
+                    val keyPair = getOrCreateAdbKeyPair()
+                    val dadb = Dadb.create(watchIp, 5555, keyPair)
+                    try {
+                        val remotePlaylistDir = "/sdcard/Music/Playlists"
+                        dadb.shell("mkdir -p '$remotePlaylistDir'")
+                        dadb.push(m3uFile, "$remotePlaylistDir/$safeAlbumTitle.m3u")
+                        dadb.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file://$remotePlaylistDir/$safeAlbumTitle.m3u'")
+                        dadb.shell("media scan-file '$remotePlaylistDir/$safeAlbumTitle.m3u'")
+                    } finally {
+                        dadb.close()
+                    }
+                } catch (e: Exception) {}
+
                 showFinishedNotification(
-                    "✅ Альбом на часах!",
-                    "«$albumTitle» ($downloadedCount/$totalTracks треков) в памяти часов",
+                    "✅ Альбом и плейлист на часах!",
+                    "«$albumTitle» ($downloadedCount треков) в разделе Плейлисты",
                     true
                 )
                 CoroutineScope(Dispatchers.Main).launch {
-                    Toast.makeText(applicationContext, "⌚ Альбом «$albumTitle» ($downloadedCount треков) на часах!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(applicationContext, "⌚ Альбом и плейлист «$albumTitle» на часах!", Toast.LENGTH_LONG).show()
                 }
             } else {
                 showFinishedNotification(

@@ -31,23 +31,23 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.7.2.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.8.0.apk \;
           ls -lh release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-v1.7.2-APK
-          path: release-output/ShadowMusic-v1.7.2.apk
+          name: ShadowMusic-v1.8.0-APK
+          path: release-output/ShadowMusic-v1.8.0.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.7.2
-          name: "ShadowMusic v1.7.2 (Dynamic Subnet & Hotspot Anywhere Sync)"
+          tag_name: v1.8.0
+          name: "ShadowMusic v1.8.0 (Persistent Signing & Auto-Playlists)"
           body: |
-            ### ⚡ ShadowMusic v1.7.2
-            - **Dynamic Subnet Discovery**: Automatically reads the phone's active network interfaces (home Wi-Fi, cafe, office, or Phone Hotspot `192.168.43.x`).
-            - **Sync Anywhere via Phone Hotspot**: If outside, simply turn on Phone Hotspot — the watch connects and syncs at full Wi-Fi speed anywhere in the world.
-            - **Batch & Album Support**: Transfers individual songs or whole albums seamlessly.
-          files: release-output/ShadowMusic-v1.7.2.apk
+            ### ⚡ ShadowMusic v1.8.0 — Major Milestone!
+            - **Seamless App Updates (Persistent Keystore)**: Fixed the signature mismatch issue once and for all. All future builds are now signed with a permanent dedicated keystore (`keystore.p12`). You can now update the app by simply tapping "Update" without having to uninstall previous versions!
+            - **Native Watch Playlists (.m3u)**: Sharing an album automatically creates and registers an `.m3u` playlist in `/sdcard/Music/Playlists/`. The full album appears neatly grouped in the "Плейлисты" (Playlists) section of Huawei Music!
+            - **Dynamic Subnet & Anywhere Hotspot Sync**: Finds watch on any Wi-Fi or Phone Hotspot.
+          files: release-output/ShadowMusic-v1.8.0.apk

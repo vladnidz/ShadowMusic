@@ -11,14 +11,24 @@ android {
         applicationId = "com.shadow.music"
         minSdk = 26
         targetSdk = 34
-        versionCode = 17
-        versionName = "1.7.2"
+        versionCode = 18
+        versionName = "1.8.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore.p12")
+            storePassword = "shadowmusic123"
+            keyAlias = "shadowmusic"
+            keyPassword = "shadowmusic123"
+            storeType = "PKCS12"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
