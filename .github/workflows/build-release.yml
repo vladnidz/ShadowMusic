@@ -31,23 +31,23 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.7.1.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.7.2.apk \;
           ls -lh release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-v1.7.1-APK
-          path: release-output/ShadowMusic-v1.7.1.apk
+          name: ShadowMusic-v1.7.2-APK
+          path: release-output/ShadowMusic-v1.7.2.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.7.1
-          name: "ShadowMusic v1.7.1 (Full Album & Playlist Downloader)"
+          tag_name: v1.7.2
+          name: "ShadowMusic v1.7.2 (Dynamic Subnet & Hotspot Anywhere Sync)"
           body: |
-            ### ⚡ ShadowMusic v1.7.1
-            - **Full Album & Playlist Support**: Share full albums (`/playlist?list=OLAK5uy_...`) or playlists directly from YouTube Music.
-            - **Batch Background Processing**: Iterates through all tracks in the album, showing live progress (`[1/12] Track Name (45%)`), and pushes them sequentially to Huawei Watch 3 Pro.
-            - **Track Manager Synchronization**: Every downloaded track from the album appears in the local Track Manager in real-time.
-          files: release-output/ShadowMusic-v1.7.1.apk
+            ### ⚡ ShadowMusic v1.7.2
+            - **Dynamic Subnet Discovery**: Automatically reads the phone's active network interfaces (home Wi-Fi, cafe, office, or Phone Hotspot `192.168.43.x`).
+            - **Sync Anywhere via Phone Hotspot**: If outside, simply turn on Phone Hotspot — the watch connects and syncs at full Wi-Fi speed anywhere in the world.
+            - **Batch & Album Support**: Transfers individual songs or whole albums seamlessly.
+          files: release-output/ShadowMusic-v1.7.2.apk

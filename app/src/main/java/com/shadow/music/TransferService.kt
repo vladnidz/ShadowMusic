@@ -438,10 +438,33 @@ class TransferService : Service() {
         return dadb.AdbKeyPair.read(privKey, pubKey)
     }
 
+    private fun getLocalSubnets(): List<String> {
+        val subnets = mutableSetOf("192.168.1", "192.168.0", "192.168.43")
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                val addrs = iface.inetAddresses
+                while (addrs.hasMoreElements()) {
+                    val addr = addrs.nextElement()
+                    if (addr is java.net.Inet4Address && !addr.isLoopbackAddress) {
+                        val host = addr.hostAddress ?: continue
+                        val parts = host.split(".")
+                        if (parts.size == 4) {
+                            subnets.add("${parts[0]}.${parts[1]}.${parts[2]}")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {}
+        return subnets.toList()
+    }
+
     private suspend fun findWatchWifiIp(): String? = withContext(Dispatchers.IO) {
         val candidates = listOf(
-            "192.168.1.116", "192.168.0.116",
-            "192.168.1.242", "192.168.0.242",
+            "192.168.1.116", "192.168.0.116", "192.168.43.116",
+            "192.168.1.242", "192.168.0.242", "192.168.43.2",
             "192.168.1.100", "192.168.0.100"
         )
         for (ip in candidates) {
@@ -449,7 +472,7 @@ class TransferService : Service() {
         }
 
         val found = AtomicReference<String?>(null)
-        val subnets = listOf("192.168.1", "192.168.0")
+        val subnets = getLocalSubnets()
         coroutineScope {
             val jobs = subnets.flatMap { sub ->
                 (2..254).map { host ->
