@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
@@ -80,6 +81,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     @SuppressLint("MissingPermission")
+    private fun isDeviceConnected(device: BluetoothDevice, manager: BluetoothManager?): Boolean {
+        // 1. Проверка GATT подключения (BLE)
+        if (manager != null) {
+            try {
+                val gattState = manager.getConnectionState(device, BluetoothProfile.GATT)
+                if (gattState == BluetoothProfile.STATE_CONNECTED) return true
+            } catch (e: Exception) {}
+        }
+
+        // 2. Системный вызов isConnected() на уровне BluetoothDevice (ACL link)
+        try {
+            val method = device.javaClass.getMethod("isConnected")
+            val connected = method.invoke(device) as? Boolean
+            if (connected == true) return true
+        } catch (e: Exception) {}
+
+        return false
+    }
+
+    @SuppressLint("MissingPermission")
     private fun checkRealHardwareStatus() {
         tvStatus.text = "⏳ Проверка радиомодулей..."
         tvDetails.text = "Опрос Bluetooth и Wi-Fi..."
@@ -109,31 +130,40 @@ class MainActivity : AppCompatActivity() {
         }
 
         CoroutineScope(Dispatchers.IO).launch {
-            // Real probe of watch Wi-Fi socket
-            var isWifiAdbReachable = false
-            try {
-                val socket = Socket()
-                socket.connect(InetSocketAddress("192.168.1.116", 5555), 600)
-                socket.close()
-                isWifiAdbReachable = true
-            } catch (e: Exception) {}
+            // Реальная проверка доступности часов по Wi-Fi
+            var reachedIp: String? = null
+            for (ip in listOf("192.168.1.116", "192.168.0.116", "192.168.1.242", "192.168.0.242")) {
+                try {
+                    val socket = Socket()
+                    socket.connect(InetSocketAddress(ip, 5555), 350)
+                    socket.close()
+                    reachedIp = ip
+                    break
+                } catch (e: Exception) {}
+            }
+
+            val isBtConnected = matchedDevice != null && isDeviceConnected(matchedDevice, bluetoothManager)
 
             withContext(Dispatchers.Main) {
-                if (!isBtEnabled && !isWifiAdbReachable) {
-                    tvStatus.text = "🔴 Часы НЕ подключены"
-                    tvDetails.text = "Bluetooth выключен на телефоне, Wi-Fi недоступен"
-                    tvStatus.setTextColor(getColor(android.R.color.holo_red_light))
-                } else if (isWifiAdbReachable) {
+                if (reachedIp != null) {
                     tvStatus.text = "🟢 Подключено (Домашний Wi-Fi)"
-                    tvDetails.text = "Канал: Прямой высокоскоростной Wi-Fi (192.168.1.116)"
+                    tvDetails.text = "Канал: Прямой высокоскоростной Wi-Fi ($reachedIp)\nПередача в 1 клик без запросов"
+                    tvStatus.setTextColor(getColor(R.color.neon_green))
+                } else if (isBtConnected) {
+                    tvStatus.text = "🔵 Подключено (Bluetooth)"
+                    tvDetails.text = "Устройство: ${matchedDevice?.name}. Часы рядом на связи"
                     tvStatus.setTextColor(getColor(R.color.neon_green))
                 } else if (matchedDevice != null) {
-                    tvStatus.text = "🟡 Часы сопряжены (Bluetooth)"
-                    tvDetails.text = "Устройство: ${matchedDevice.name}. Готово к передаче по Bluetooth"
-                    tvStatus.setTextColor(getColor(R.color.status_pending))
+                    tvStatus.text = "🔴 Часы не на связи (Оффлайн)"
+                    tvDetails.text = "Устройство ${matchedDevice.name} сопряжено в памяти телефона, но находится вне зоны действия или выключено"
+                    tvStatus.setTextColor(getColor(android.R.color.holo_red_light))
+                } else if (!isBtEnabled) {
+                    tvStatus.text = "🔴 Bluetooth выключен"
+                    tvDetails.text = "Включите Bluetooth на телефоне"
+                    tvStatus.setTextColor(getColor(android.R.color.holo_red_light))
                 } else {
                     tvStatus.text = "🔴 Часы не найдены"
-                    tvDetails.text = "Включите Bluetooth на телефоне или разбудите часы"
+                    tvDetails.text = "Сопрягите часы Huawei в настройках телефона"
                     tvStatus.setTextColor(getColor(android.R.color.holo_red_light))
                 }
             }

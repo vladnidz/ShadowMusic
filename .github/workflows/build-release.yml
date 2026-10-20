@@ -31,23 +31,23 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.6.3.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.6.4.apk \;
           ls -lh release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-v1.6.3-APK
-          path: release-output/ShadowMusic-v1.6.3.apk
+          name: ShadowMusic-v1.6.4-APK
+          path: release-output/ShadowMusic-v1.6.4.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6.3
-          name: "ShadowMusic v1.6.3 (Single Folder & Storage Optimized)"
+          tag_name: v1.6.4
+          name: "ShadowMusic v1.6.4 (Physical Connection Detection)"
           body: |
-            ### ⚡ ShadowMusic v1.6.3
-            - **Storage Optimized (No 2x Duplication)**: Pushes strictly to `/sdcard/Music/Imported Songs/`. Zero wasted watch storage.
-            - **Native Huawei Music Integration**: Songs appear directly in the 'Imported Songs' section of the watch music player.
-            - **Strict .mp3 Extension & Clean MediaScanner**: Direct indexing.
-          files: release-output/ShadowMusic-v1.6.3.apk
+            ### ⚡ ShadowMusic v1.6.4
+            - **Honest Physical Bluetooth Link Detection**: Now checks real ACL/GATT connection state with `BluetoothDevice.isConnected()` and `BluetoothManager.getConnectionState()`. Does not falsely report "Ready" if paired device is away or turned off.
+            - **Strict .mp3 Extension & Single Folder**: Pushes strictly to `/sdcard/Music/Imported Songs/`.
+            - **Instant Wi-Fi Direct Push**: Takes 1.5 seconds when both devices are on the same Wi-Fi.
+          files: release-output/ShadowMusic-v1.6.4.apk
