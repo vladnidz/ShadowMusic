@@ -31,23 +31,28 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.6.4.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.7.0.apk \;
           ls -lh release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-v1.6.4-APK
-          path: release-output/ShadowMusic-v1.6.4.apk
+          name: ShadowMusic-v1.7.0-APK
+          path: release-output/ShadowMusic-v1.7.0.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6.4
-          name: "ShadowMusic v1.6.4 (Physical Connection Detection)"
+          tag_name: v1.7.0
+          name: "ShadowMusic v1.7.0 (Background Service & Track Manager)"
           body: |
-            ### ⚡ ShadowMusic v1.6.4
-            - **Honest Physical Bluetooth Link Detection**: Now checks real ACL/GATT connection state with `BluetoothDevice.isConnected()` and `BluetoothManager.getConnectionState()`. Does not falsely report "Ready" if paired device is away or turned off.
-            - **Strict .mp3 Extension & Single Folder**: Pushes strictly to `/sdcard/Music/Imported Songs/`.
-            - **Instant Wi-Fi Direct Push**: Takes 1.5 seconds when both devices are on the same Wi-Fi.
-          files: release-output/ShadowMusic-v1.6.4.apk
+            ### ⚡ ShadowMusic v1.7.0 — Major Upgrade!
+            - **Silent Background Processing**: Sharing from YouTube Music does not interrupt you or open a full-screen window. The download and watch push happen silently via a Foreground Service with a clean system notification progress bar.
+            - **Track Manager UI in App**:
+              - View all downloaded tracks with file sizes and dates.
+              - Multi-selection: "Select All" / "Deselect".
+              - Batch Upload: "⚡ Upload Selected (N)" to watch over Wi-Fi.
+              - Batch Delete: "🗑 Delete Selected (N)" from device storage.
+              - Single-tap quick action buttons for individual tracks.
+            - **Native Huawei Music Integration**: Strictly writes to `/sdcard/Music/Imported Songs/` with instant MediaScanner refresh.
+          files: release-output/ShadowMusic-v1.7.0.apk

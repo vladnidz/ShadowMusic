@@ -12,6 +12,9 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
 
     <application
         android:allowBackup="true"
@@ -35,7 +38,7 @@
             android:name=".ShareReceiverActivity"
             android:exported="true"
             android:label="@string/share_target_title"
-            android:theme="@style/Theme.ShadowMusic">
+            android:theme="@style/Theme.ShadowMusic.Translucent">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -47,6 +50,11 @@
                 <data android:mimeType="audio/*" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name=".TransferService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
 
             <provider
             android:name="androidx.core.content.FileProvider"
