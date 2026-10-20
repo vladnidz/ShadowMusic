@@ -228,8 +228,8 @@ class ShareReceiverActivity : AppCompatActivity() {
                 // 3. Быстрое скачивание через 1MB Range-чанки
                 val outDir = File(externalCacheDir ?: cacheDir, "shadowmusic").also { it.mkdirs() }
                 val safeTitle = trackTitle.replace(Regex("[^\\w\\sА-Яа-яЁё-]"), "").trim().take(70)
-                val ext = if (audioStream.format?.mimeType?.contains("webm") == true) "webm" else "m4a"
-                val audioFile = File(outDir, "$safeTitle.$ext")
+                // Всегда используем расширение .mp3, так как плеер Huawei Music на часах индексирует файлы по маске .mp3
+                val audioFile = File(outDir, "$safeTitle.mp3")
 
                 downloadStreamUnthrottled(audioUrl, audioFile) { percent, downloaded, total ->
                     runOnUiThread {
@@ -298,31 +298,43 @@ class ShareReceiverActivity : AppCompatActivity() {
         val keyPair = getOrCreateAdbKeyPair()
         val dadbInstance = Dadb.create(ip, 5555, keyPair)
         try {
-            val remoteDir = "/sdcard/Music/Imported Songs"
-            dadbInstance.shell("mkdir -p '$remoteDir'")
-            val remotePath = "$remoteDir/${file.name}"
-            dadbInstance.push(file, remotePath)
-            val encoded = remotePath.replace(" ", "%20")
-            dadbInstance.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file://$encoded'")
+            val fileName = file.name
+            // Пушим в обе папки для гарантированной видимости во всех версиях плеера
+            dadbInstance.shell("mkdir -p '/sdcard/Music/Imported Songs' '/sdcard/Music'")
+            dadbInstance.push(file, "/sdcard/Music/Imported Songs/$fileName")
+            dadbInstance.push(file, "/sdcard/Music/$fileName")
+
+            // Оповещаем системный медиа-сканер часов
+            dadbInstance.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file:///sdcard/Music/$fileName'")
+            dadbInstance.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file:///sdcard/Music/Imported Songs/$fileName'")
+            dadbInstance.shell("media scan-file '/sdcard/Music/$fileName'")
+            dadbInstance.shell("media scan-file '/sdcard/Music/Imported Songs/$fileName'")
         } finally {
             dadbInstance.close()
         }
     }
 
     private suspend fun findWatchWifiIp(): String? = withContext(Dispatchers.IO) {
-        val candidates = listOf("192.168.1.116", "192.168.1.242", "192.168.1.100")
+        val candidates = listOf(
+            "192.168.1.116", "192.168.0.116",
+            "192.168.1.242", "192.168.0.242",
+            "192.168.1.100", "192.168.0.100"
+        )
         for (ip in candidates) {
             if (testSocket(ip, 5555)) return@withContext ip
         }
 
-        // Сканирование подсети
+        // Сканирование подсетей 192.168.1.* и 192.168.0.*
         val found = AtomicReference<String?>(null)
-        val jobs = (2..254).map { host ->
-            async {
-                if (found.get() != null) return@async
-                val ip = "192.168.1.$host"
-                if (testSocket(ip, 5555)) {
-                    found.set(ip)
+        val subnets = listOf("192.168.1", "192.168.0")
+        val jobs = subnets.flatMap { sub ->
+            (2..254).map { host ->
+                async {
+                    if (found.get() != null) return@async
+                    val ip = "$sub.$host"
+                    if (testSocket(ip, 5555)) {
+                        found.set(ip)
+                    }
                 }
             }
         }

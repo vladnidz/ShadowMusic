@@ -31,23 +31,24 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.6.1.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.6.2.apk \;
           ls -lh release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-v1.6.1-APK
-          path: release-output/ShadowMusic-v1.6.1.apk
+          name: ShadowMusic-v1.6.2-APK
+          path: release-output/ShadowMusic-v1.6.2.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6.1
-          name: "ShadowMusic v1.6.1 (Auto ADB Key Generation)"
+          tag_name: v1.6.2
+          name: "ShadowMusic v1.6.2 (Native MP3 & MediaScanner Fix)"
           body: |
-            ### ⚡ ShadowMusic v1.6.1
-            - **Auto ADB KeyPair Generation**: Fixed `~/.android/adbkey ENOENT` error. App now automatically creates and manages its own secure ADB key pair in internal storage (`filesDir/adbkey`).
-            - **Instant Wi-Fi Direct Push**: Direct push to `/sdcard/Music/Imported Songs/` with auto-scanner broadcast.
-            - **Seamless Bluetooth Fallback**: When away from home Wi-Fi.
-          files: release-output/ShadowMusic-v1.6.1.apk
+            ### ⚡ ShadowMusic v1.6.2
+            - **Strict .mp3 Extension**: Huawei Music on watch filters tracks by `.mp3`. Files are now saved as `.mp3` so they appear immediately in the player.
+            - **Dual-Folder Distribution**: Pushes to both `/sdcard/Music/Imported Songs/` and `/sdcard/Music/`.
+            - **Unescaped MediaScanner Broadcast**: Removed `%20` encoding bug that caused MediaScanner to miss files with spaces in names.
+            - **Multi-Subnet Wi-Fi Scan**: Scans both 192.168.1.x and 192.168.0.x subnets.
+          files: release-output/ShadowMusic-v1.6.2.apk
