@@ -18,7 +18,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody
@@ -338,18 +340,20 @@ class TransferService : Service() {
 
         val found = AtomicReference<String?>(null)
         val subnets = listOf("192.168.1", "192.168.0")
-        val jobs = subnets.flatMap { sub ->
-            (2..254).map { host ->
-                async {
-                    if (found.get() != null) return@async
-                    val ip = "$sub.$host"
-                    if (testSocket(ip, 5555)) {
-                        found.set(ip)
+        coroutineScope {
+            val jobs = subnets.flatMap { sub ->
+                (2..254).map { host ->
+                    async {
+                        if (found.get() != null) return@async
+                        val ip = "$sub.$host"
+                        if (testSocket(ip, 5555)) {
+                            found.set(ip)
+                        }
                     }
                 }
             }
+            jobs.awaitAll()
         }
-        jobs.awaitAll()
         return@withContext found.get()
     }
 
