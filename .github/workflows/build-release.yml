@@ -31,28 +31,23 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.7.0.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.7.1.apk \;
           ls -lh release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-v1.7.0-APK
-          path: release-output/ShadowMusic-v1.7.0.apk
+          name: ShadowMusic-v1.7.1-APK
+          path: release-output/ShadowMusic-v1.7.1.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.7.0
-          name: "ShadowMusic v1.7.0 (Background Service & Track Manager)"
+          tag_name: v1.7.1
+          name: "ShadowMusic v1.7.1 (Full Album & Playlist Downloader)"
           body: |
-            ### ⚡ ShadowMusic v1.7.0 — Major Upgrade!
-            - **Silent Background Processing**: Sharing from YouTube Music does not interrupt you or open a full-screen window. The download and watch push happen silently via a Foreground Service with a clean system notification progress bar.
-            - **Track Manager UI in App**:
-              - View all downloaded tracks with file sizes and dates.
-              - Multi-selection: "Select All" / "Deselect".
-              - Batch Upload: "⚡ Upload Selected (N)" to watch over Wi-Fi.
-              - Batch Delete: "🗑 Delete Selected (N)" from device storage.
-              - Single-tap quick action buttons for individual tracks.
-            - **Native Huawei Music Integration**: Strictly writes to `/sdcard/Music/Imported Songs/` with instant MediaScanner refresh.
-          files: release-output/ShadowMusic-v1.7.0.apk
+            ### ⚡ ShadowMusic v1.7.1
+            - **Full Album & Playlist Support**: Share full albums (`/playlist?list=OLAK5uy_...`) or playlists directly from YouTube Music.
+            - **Batch Background Processing**: Iterates through all tracks in the album, showing live progress (`[1/12] Track Name (45%)`), and pushes them sequentially to Huawei Watch 3 Pro.
+            - **Track Manager Synchronization**: Every downloaded track from the album appears in the local Track Manager in real-time.
+          files: release-output/ShadowMusic-v1.7.1.apk

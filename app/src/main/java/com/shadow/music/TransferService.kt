@@ -28,8 +28,10 @@ import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.downloader.Downloader
 import org.schabi.newpipe.extractor.downloader.Response
+import org.schabi.newpipe.extractor.playlist.PlaylistExtractor
 import org.schabi.newpipe.extractor.stream.AudioStream
 import org.schabi.newpipe.extractor.stream.StreamExtractor
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import java.io.File
 import java.io.FileOutputStream
 import java.net.InetSocketAddress
@@ -217,79 +219,17 @@ class TransferService : Service() {
 
     private suspend fun processTrack(rawUrl: String) {
         try {
-            updateNotification("🎵 ShadowMusic", "Извлечение аудиопотока...", 15, true)
-
             val cleanUrl = rawUrl
                 .replace("music.youtube.com", "www.youtube.com")
                 .replace("m.youtube.com", "www.youtube.com")
 
-            val extractor: StreamExtractor = ServiceList.YouTube.getStreamExtractor(cleanUrl)
-            extractor.fetchPage()
+            val isPlaylist = cleanUrl.contains("playlist?list=") ||
+                    (!cleanUrl.contains("/watch?") && cleanUrl.contains("list="))
 
-            val trackTitle = extractor.name
-            val trackArtist = try { extractor.uploaderName } catch (e: Exception) { "YouTube" }
-
-            updateNotification("⬇️ Скачивание", "$trackTitle — $trackArtist", 25, false)
-
-            val audioStream: AudioStream = extractor.audioStreams
-                .filter { it.format?.mimeType?.contains("audio") == true || it.format?.mimeType?.contains("mp4") == true }
-                .maxByOrNull { it.averageBitrate }
-                ?: extractor.audioStreams.firstOrNull()
-                ?: throw Exception("Аудиопоток не найден на YouTube")
-
-            val audioUrl = audioStream.content
-
-            val outDir = File(externalCacheDir ?: cacheDir, "shadowmusic").also { it.mkdirs() }
-            val safeTitle = trackTitle.replace(Regex("[^\\w\\sА-Яа-яЁё-]"), "").trim().take(70)
-            val audioFile = File(outDir, "$safeTitle.mp3")
-
-            downloadStreamUnthrottled(audioUrl, audioFile) { percent, downloaded, total ->
-                val totalKb = if (total > 0) total / 1024 else 0
-                val text = "$trackTitle (${downloaded / 1024} KB" + (if (totalKb > 0) " / $totalKb KB)" else ")")
-                updateNotification("⬇️ Скачивание ($percent%)", text, 25 + (percent * 0.55).toInt(), false)
-            }
-
-            // Уведомляем интерфейс менеджера треков о новом файле
-            sendBroadcast(Intent(ACTION_TRACKS_UPDATED))
-
-            // Передача на часы
-            updateNotification("📡 Поиск часов", "Проверка связи с Huawei Watch по Wi-Fi...", 85, true)
-
-            val watchIp = findWatchWifiIp()
-            if (watchIp != null) {
-                updateNotification("⚡ Передача", "Отправка на часы ($watchIp)...", 90, true)
-                pushDirectlyToWatch(watchIp, audioFile)
-
-                showFinishedNotification(
-                    "✅ Трек на часах!",
-                    "«$trackTitle» сохранен в память часов",
-                    true
-                )
-
-                CoroutineScope(Dispatchers.Main).launch {
-                    Toast.makeText(applicationContext, "⌚ «$trackTitle» сохранен в Huawei Music!", Toast.LENGTH_LONG).show()
-                }
+            if (isPlaylist) {
+                processPlaylist(cleanUrl)
             } else {
-                // Если Wi-Fi недоступен — создаем уведомление с действием отправки через Bluetooth
-                val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", audioFile)
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "audio/*"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                val chooser = Intent.createChooser(shareIntent, "Отправить на Huawei Watch")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                val pi = PendingIntent.getActivity(
-                    this, 102, chooser,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-
-                showFinishedNotification(
-                    "📲 Нажмите для отправки на часы",
-                    "«$trackTitle» скачан. Нажмите, чтобы передать через Bluetooth",
-                    false,
-                    pi
-                )
+                processSingleTrack(cleanUrl)
             }
 
         } catch (e: Exception) {
@@ -301,6 +241,176 @@ class TransferService : Service() {
         } finally {
             stopForeground(STOP_FOREGROUND_DETACH)
             stopSelf()
+        }
+    }
+
+    private suspend fun processPlaylist(playlistUrl: String) {
+        updateNotification("💿 ShadowMusic", "Получение списка треков альбома...", 10, true)
+
+        val playlistExtractor: PlaylistExtractor = ServiceList.YouTube.getPlaylistExtractor(playlistUrl)
+        playlistExtractor.fetchPage()
+
+        val albumTitle = playlistExtractor.name ?: "Альбом"
+        val initialPage = playlistExtractor.initialPage
+        val items: List<StreamInfoItem> = initialPage?.items ?: emptyList()
+
+        if (items.isEmpty()) {
+            throw Exception("В альбоме «$albumTitle» не найдено треков")
+        }
+
+        val totalTracks = items.size
+        updateNotification("💿 Альбом: $albumTitle", "Найдено треков: $totalTracks. Подготовка...", 15, false)
+
+        val outDir = File(externalCacheDir ?: cacheDir, "shadowmusic").also { it.mkdirs() }
+        val watchIp = findWatchWifiIp()
+
+        var downloadedCount = 0
+        val downloadedFiles = mutableListOf<File>()
+
+        for ((index, item) in items.withIndex()) {
+            val trackNum = index + 1
+            val trackName = item.name ?: "Трек $trackNum"
+            val itemUrl = item.url
+
+            val progressPct = ((index.toDouble() / totalTracks) * 100).toInt()
+            updateNotification(
+                "💿 [$trackNum/$totalTracks] $albumTitle",
+                "Скачивание: $trackName",
+                progressPct,
+                false
+            )
+
+            try {
+                val streamExtractor: StreamExtractor = ServiceList.YouTube.getStreamExtractor(itemUrl)
+                streamExtractor.fetchPage()
+
+                val audioStream = streamExtractor.audioStreams
+                    .filter { it.format?.mimeType?.contains("audio") == true || it.format?.mimeType?.contains("mp4") == true }
+                    .maxByOrNull { it.averageBitrate }
+                    ?: streamExtractor.audioStreams.firstOrNull()
+                    ?: continue
+
+                val safeTitle = trackName.replace(Regex("[^\\w\\sА-Яа-яЁё-]"), "").trim().take(70)
+                val audioFile = File(outDir, "$safeTitle.mp3")
+
+                if (!audioFile.exists() || audioFile.length() < 100_000) {
+                    downloadStreamUnthrottled(audioStream.content, audioFile) { _, _, _ -> }
+                }
+
+                downloadedFiles.add(audioFile)
+                downloadedCount++
+
+                sendBroadcast(Intent(ACTION_TRACKS_UPDATED))
+
+                if (watchIp != null) {
+                    updateNotification(
+                        "⚡ [$trackNum/$totalTracks] Передача на часы",
+                        "Загрузка: $safeTitle",
+                        progressPct,
+                        false
+                    )
+                    pushDirectlyToWatch(watchIp, audioFile)
+                }
+            } catch (e: Exception) {
+                // Если один трек дал сбой, продолжаем остальные
+            }
+        }
+
+        if (downloadedCount > 0) {
+            if (watchIp != null) {
+                showFinishedNotification(
+                    "✅ Альбом на часах!",
+                    "«$albumTitle» ($downloadedCount/$totalTracks треков) в памяти часов",
+                    true
+                )
+                CoroutineScope(Dispatchers.Main).launch {
+                    Toast.makeText(applicationContext, "⌚ Альбом «$albumTitle» ($downloadedCount треков) на часах!", Toast.LENGTH_LONG).show()
+                }
+            } else {
+                showFinishedNotification(
+                    "✅ Альбом скачан!",
+                    "«$albumTitle» ($downloadedCount треков) сохранен на телефоне",
+                    true
+                )
+                CoroutineScope(Dispatchers.Main).launch {
+                    Toast.makeText(applicationContext, "💿 Альбом «$albumTitle» скачан на телефон!", Toast.LENGTH_LONG).show()
+                }
+            }
+        } else {
+            throw Exception("Не удалось скачать треки из альбома")
+        }
+    }
+
+    private suspend fun processSingleTrack(cleanUrl: String) {
+        updateNotification("🎵 ShadowMusic", "Извлечение аудиопотока...", 15, true)
+
+        val extractor: StreamExtractor = ServiceList.YouTube.getStreamExtractor(cleanUrl)
+        extractor.fetchPage()
+
+        val trackTitle = extractor.name
+        val trackArtist = try { extractor.uploaderName } catch (e: Exception) { "YouTube" }
+
+        updateNotification("⬇️ Скачивание", "$trackTitle — $trackArtist", 25, false)
+
+        val audioStream: AudioStream = extractor.audioStreams
+            .filter { it.format?.mimeType?.contains("audio") == true || it.format?.mimeType?.contains("mp4") == true }
+            .maxByOrNull { it.averageBitrate }
+            ?: extractor.audioStreams.firstOrNull()
+            ?: throw Exception("Аудиопоток не найден на YouTube")
+
+        val audioUrl = audioStream.content
+
+        val outDir = File(externalCacheDir ?: cacheDir, "shadowmusic").also { it.mkdirs() }
+        val safeTitle = trackTitle.replace(Regex("[^\\w\\sА-Яа-яЁё-]"), "").trim().take(70)
+        val audioFile = File(outDir, "$safeTitle.mp3")
+
+        downloadStreamUnthrottled(audioUrl, audioFile) { percent, downloaded, total ->
+            val totalKb = if (total > 0) total / 1024 else 0
+            val text = "$trackTitle (${downloaded / 1024} KB" + (if (totalKb > 0) " / $totalKb KB)" else ")")
+            updateNotification("⬇️ Скачивание ($percent%)", text, 25 + (percent * 0.55).toInt(), false)
+        }
+
+        // Уведомляем интерфейс менеджера треков о новом файле
+        sendBroadcast(Intent(ACTION_TRACKS_UPDATED))
+
+        // Передача на часы
+        updateNotification("📡 Поиск часов", "Проверка связи с Huawei Watch по Wi-Fi...", 85, true)
+
+        val watchIp = findWatchWifiIp()
+        if (watchIp != null) {
+            updateNotification("⚡ Передача", "Отправка на часы ($watchIp)...", 90, true)
+            pushDirectlyToWatch(watchIp, audioFile)
+
+            showFinishedNotification(
+                "✅ Трек на часах!",
+                "«$trackTitle» сохранен в память часов",
+                true
+            )
+
+            CoroutineScope(Dispatchers.Main).launch {
+                Toast.makeText(applicationContext, "⌚ «$trackTitle» сохранен в Huawei Music!", Toast.LENGTH_LONG).show()
+            }
+        } else {
+            // Если Wi-Fi недоступен — создаем уведомление с действием отправки через Bluetooth
+            val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", audioFile)
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "audio/*"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(shareIntent, "Отправить на Huawei Watch")
+            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val pi = PendingIntent.getActivity(
+                this, 102, chooser,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+
+            showFinishedNotification(
+                "📲 Нажмите для отправки на часы",
+                "«$trackTitle» скачан. Нажмите, чтобы передать через Bluetooth",
+                false,
+                pi
+            )
         }
     }
 
