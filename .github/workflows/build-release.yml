@@ -31,24 +31,23 @@ jobs:
       - name: Prepare APK
         run: |
           mkdir -p release-output
-          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.6.2.apk \;
+          find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-output/ShadowMusic-v1.6.3.apk \;
           ls -lh release-output/
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ShadowMusic-v1.6.2-APK
-          path: release-output/ShadowMusic-v1.6.2.apk
+          name: ShadowMusic-v1.6.3-APK
+          path: release-output/ShadowMusic-v1.6.3.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.6.2
-          name: "ShadowMusic v1.6.2 (Native MP3 & MediaScanner Fix)"
+          tag_name: v1.6.3
+          name: "ShadowMusic v1.6.3 (Single Folder & Storage Optimized)"
           body: |
-            ### ⚡ ShadowMusic v1.6.2
-            - **Strict .mp3 Extension**: Huawei Music on watch filters tracks by `.mp3`. Files are now saved as `.mp3` so they appear immediately in the player.
-            - **Dual-Folder Distribution**: Pushes to both `/sdcard/Music/Imported Songs/` and `/sdcard/Music/`.
-            - **Unescaped MediaScanner Broadcast**: Removed `%20` encoding bug that caused MediaScanner to miss files with spaces in names.
-            - **Multi-Subnet Wi-Fi Scan**: Scans both 192.168.1.x and 192.168.0.x subnets.
-          files: release-output/ShadowMusic-v1.6.2.apk
+            ### ⚡ ShadowMusic v1.6.3
+            - **Storage Optimized (No 2x Duplication)**: Pushes strictly to `/sdcard/Music/Imported Songs/`. Zero wasted watch storage.
+            - **Native Huawei Music Integration**: Songs appear directly in the 'Imported Songs' section of the watch music player.
+            - **Strict .mp3 Extension & Clean MediaScanner**: Direct indexing.
+          files: release-output/ShadowMusic-v1.6.3.apk

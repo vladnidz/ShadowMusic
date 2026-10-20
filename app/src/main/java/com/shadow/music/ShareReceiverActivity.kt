@@ -299,16 +299,14 @@ class ShareReceiverActivity : AppCompatActivity() {
         val dadbInstance = Dadb.create(ip, 5555, keyPair)
         try {
             val fileName = file.name
-            // Пушим в обе папки для гарантированной видимости во всех версиях плеера
-            dadbInstance.shell("mkdir -p '/sdcard/Music/Imported Songs' '/sdcard/Music'")
-            dadbInstance.push(file, "/sdcard/Music/Imported Songs/$fileName")
-            dadbInstance.push(file, "/sdcard/Music/$fileName")
+            val targetDir = "/sdcard/Music/Imported Songs"
+            dadbInstance.shell("mkdir -p '$targetDir'")
+            // Сохраняем строго один раз в родную папку Huawei Music без дублирования памяти
+            dadbInstance.push(file, "$targetDir/$fileName")
 
             // Оповещаем системный медиа-сканер часов
-            dadbInstance.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file:///sdcard/Music/$fileName'")
-            dadbInstance.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file:///sdcard/Music/Imported Songs/$fileName'")
-            dadbInstance.shell("media scan-file '/sdcard/Music/$fileName'")
-            dadbInstance.shell("media scan-file '/sdcard/Music/Imported Songs/$fileName'")
+            dadbInstance.shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d 'file://$targetDir/$fileName'")
+            dadbInstance.shell("media scan-file '$targetDir/$fileName'")
         } finally {
             dadbInstance.close()
         }
